@@ -17,15 +17,11 @@ class Model:
         try:
             return int(string)
         except ValueError:
-            raise Exception(self.error(f"Invalid number {string}"))
+            raise ValueError(self.error(f"Invalid number {string}"))
 
     def error(self, error_message):
         error_message += f" (line #{self.line_number})"
         return error_message
-
-    def normalize_string(self, string):
-        normalized = unicodedata.normalize("NFC", string)
-        return normalized
 
     def parse_constants(self, line):
         constant, endings = self.split_string(line, "=", 2)
@@ -33,7 +29,7 @@ class Model:
 
     def parse_endings(self, string):
         endings = self.split_string(string, ";")
-        endings = [self.split_string(ending, ",", 2) for ending in endings]
+        endings = [self.split_string(ending, ",") for ending in endings]
         # TODO: check endings contain only letters with str.isalpha(), including a possible digit at the very end for "des"
         return endings
 
@@ -80,22 +76,22 @@ class Model:
     def parse_numbers(self, string):
         numbers = []
         ranges = [
-            self.split_string(range, "-", 2) for range in self.split_string(string, ",")
+            self.split_string(range, "-") for range in self.split_string(string, ",")
         ]
-        for range in ranges:
-            assert len(range) <= 2, self.error(f"Invalid number range in {string}")
-            start = self.convert_string_to_number(range[0])
-            if len(range) == 1:
+        for myrange in ranges:
+            assert len(myrange) <= 2, self.error(f"Invalid number range in {string}")
+            start = self.convert_string_to_number(myrange[0])
+            if len(myrange) == 1:
                 numbers.append(start)  # single number
             else:
-                stop = self.convert_string_to_number(range[1])  # number range
+                stop = self.convert_string_to_number(myrange[1])  # number range
                 numbers += [*range(start, stop + 1)]
         # TODO: check numbers correspond to an entry in morphos.la
         return numbers
 
     def parse_root(self, root, fix):
         root = self.convert_string_to_number(root)
-        fix = self.split_string(fix, ",", 2)
+        fix = self.split_string(fix, ",")
         nb_chars_to_remove = fix[0]
         if nb_chars_to_remove != "-" and nb_chars_to_remove != "K":
             nb_chars_to_remove = self.convert_string_to_number(nb_chars_to_remove)
@@ -112,7 +108,7 @@ class Model:
     def read_model(self):
         path = Path(__file__).parent.joinpath("data/modeles.la")
         with path.open(encoding="utf-8") as f:
-            lines = self.normalize_string(f.read()).split("\n")
+            lines = unicodedata.normalize("NFC", f.read()).split("\n")
             self.parse_lines(lines)
 
     def split_string(self, string, separator, expected_nb_pieces=None):
@@ -121,12 +117,9 @@ class Model:
             self.validate_nb_of_pieces(string, pieces, expected_nb_pieces)
         for piece in pieces:
             assert piece != "", self.error(f"Empty substring in split string {string}")
+        return pieces
 
     def validate_nb_of_pieces(self, string, pieces, expected_nb_pieces):
         assert len(pieces) == expected_nb_pieces, self.error(
             f"Unexpected number of substrings in string split by : (colon) {string}"
         )
-
-
-model = Model()
-model.read_model()
