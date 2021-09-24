@@ -23,7 +23,7 @@ class Model:
         error_message += f" (line #{self.line_number})"
         return error_message
 
-    def parse_constants(self, line):
+    def parse_constant(self, line):
         constant, endings = self.split_string(line, "=", 2)
         self.constants[constant] = self.parse_endings(endings)
 
@@ -58,7 +58,7 @@ class Model:
             if line == "" or line[0] == "!":
                 pass  # ignore empty lines and comments
             elif line[0] == "$":
-                self.parse_constants(line)
+                self.parse_constant(line)
             else:
                 self.parse_line(line)
 
