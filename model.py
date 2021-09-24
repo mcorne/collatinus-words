@@ -5,6 +5,7 @@ from pathlib import Path
 class Model:
     constants = {}
     current_model = {}
+    line_number = 0
     models = {}
 
     def convert_string_to_ascii(self, string):
@@ -12,57 +13,119 @@ class Model:
         ascii = decomposed.encode("ASCII", "ignore").decode()
         return ascii
 
+    def convert_string_to_number(self, string):
+        try:
+            return int(string)
+        except ValueError:
+            raise Exception(self.error(f"Invalid number {string}"))
+
+    def error(self, error_message):
+        error_message += f" (line #{self.line_number})"
+        return error_message
+
     def normalize_string(self, string):
         normalized = unicodedata.normalize("NFC", string)
         return normalized
 
     def parse_constants(self, line):
-        constant, endings = line.split("=")
-        endings = endings.split(";")
-        endings = [ending.split(",") for ending in endings]
-        self.constants[constant] = endings
+        constant, endings = self.split_string(line, "=", 2)
+        self.constants[constant] = self.parse_endings(endings)
+
+    def parse_endings(self, string):
+        endings = self.split_string(string, ";")
+        endings = [self.split_string(ending, ",", 2) for ending in endings]
+        # TODO: check endings contain only letters with str.isalpha(), including a possible digit at the very end for "des"
+        return endings
 
     def parse_line(self, line):
-        pieces = line.split(":")
+        pieces = self.split_string(line, ":")
         line_type = pieces[0]
-        del pieces[-1]
+        del pieces[0]
 
-        if line_type == "modele":
-            self.current_model = {
-                "abs": {},
-                "des": {},
-                "pos": {},
-                "R": {},
-                "suf": {},
-                "sufd": {},
-            }
-            self.models[line_type] = self.current_model
+        if line_type == "abs":
+            self.validate_nb_of_pieces(line, pieces, 1)
+            self.parse_unused_inflections(unused_inflections=pieces[0])
+        elif line_type == "modele":
+            self.validate_nb_of_pieces(line, pieces, 1)
+            self.parse_model(model=pieces[0])
         elif line_type == "R":
-            self.parse_R(pieces)
+            self.validate_nb_of_pieces(line, pieces, 2)
+            self.parse_root(root=pieces[0], fix=pieces[1])
+        else:
+            pass
+            # TODO: throw exception
 
     def parse_lines(self, lines):
         for line in lines:
-            line = line.replace(" ", "")  # remove spaces
-            if line == "" or line[0] == "!":  # comment
-                continue
-            if line[0] == "$":
+            self.line_number += 1
+            line = line.replace(" ", "").strip()  # remove spaces
+            if line == "" or line[0] == "!":
+                pass  # ignore empty lines and comments
+            elif line[0] == "$":
                 self.parse_constants(line)
-                continue
-            self.parse_line(line)
+            else:
+                self.parse_line(line)
 
-    def parse_R(self, pieces):
-        root = pieces[0]
-        parts = pieces[1].split(",")
-        self.current_model["R"][root] = {
-            "nb_chars_to_remove": parts[0],
-            "string_to_add": None if len(parts) == 1 else parts[1],
+    def parse_model(self, model):
+        self.current_model = {
+            "endings": {},  # des (désinences)
+            "mandatory_suffixes": {},  # sufd (suffixes désinences), eg quī+dăm, quēm+dăm etc.
+            "optional_suffixes": {},  # suf (suffixes), eg 	hīc+ĕ, hīc+ĭnĕ or hīc
+            "pos": {},  # part of speech
+            "roots": {},  # R (radicaux)
+            "unused_inflections": [],  # abs (désinences absentes)
         }
+        self.models[model] = self.current_model
+
+    def parse_numbers(self, string):
+        numbers = []
+        ranges = [
+            self.split_string(range, "-", 2) for range in self.split_string(string, ",")
+        ]
+        for range in ranges:
+            assert len(range) <= 2, self.error(f"Invalid number range in {string}")
+            start = self.convert_string_to_number(range[0])
+            if len(range) == 1:
+                numbers.append(start)  # single number
+            else:
+                stop = self.convert_string_to_number(range[1])  # number range
+                numbers += [*range(start, stop + 1)]
+        # TODO: check numbers correspond to an entry in morphos.la
+        return numbers
+
+    def parse_root(self, root, fix):
+        root = self.convert_string_to_number(root)
+        fix = self.split_string(fix, ",", 2)
+        nb_chars_to_remove = fix[0]
+        if nb_chars_to_remove != "-" and nb_chars_to_remove != "K":
+            nb_chars_to_remove = self.convert_string_to_number(nb_chars_to_remove)
+        string_to_add = None if len(fix) == 1 else fix[1]
+        self.current_model["roots"][root] = {
+            "nb_chars_to_remove": nb_chars_to_remove,
+            "string_to_add": string_to_add,  # TODO: validate letters
+        }
+
+    def parse_unused_inflections(self, unused_inflections):
+        numbers = self.parse_numbers(unused_inflections)
+        self.current_model["unused_inflections"] += numbers
 
     def read_model(self):
         path = Path(__file__).parent.joinpath("data/modeles.la")
         with path.open(encoding="utf-8") as f:
             lines = self.normalize_string(f.read()).split("\n")
             self.parse_lines(lines)
+
+    def split_string(self, string, separator, expected_nb_pieces=None):
+        pieces = [piece.strip() for piece in string.split(separator)]
+        if expected_nb_pieces:
+            self.validate_nb_of_pieces(string, pieces, expected_nb_pieces)
+        for piece in pieces:
+            assert piece != "", self.error(f"Empty substring in split string {string}")
+
+    def validate_nb_of_pieces(self, string, pieces, expected_nb_pieces):
+        assert len(pieces) == expected_nb_pieces, self.error(
+            f"Unexpected number of substrings in string split by : (colon) {string}"
+        )
 
 
 model = Model()
