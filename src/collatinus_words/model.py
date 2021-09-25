@@ -1,8 +1,9 @@
 import unicodedata
-from pathlib import Path
+
+from common import Common
 
 
-class Model:
+class Model(Common):
     constants = {}
     current_model = {}
     line_number = 0
@@ -104,12 +105,6 @@ class Model:
     def parse_unused_inflections(self, unused_inflections):
         numbers = self.parse_numbers(unused_inflections)
         self.current_model["unused_inflections"] += numbers
-
-    def read_model(self):
-        path = Path(__file__).parent.joinpath("data/modeles.la")
-        with path.open(encoding="utf-8") as f:
-            lines = unicodedata.normalize("NFC", f.read()).split("\n")
-            self.parse_lines(lines)
 
     def split_string(self, string, separator, expected_nb_pieces=None):
         pieces = [piece.strip() for piece in string.split(separator)]

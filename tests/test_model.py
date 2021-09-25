@@ -138,10 +138,6 @@ def test_parse_unused_inflections(model: Model):
     assert model.current_model["unused_inflections"] == [1, 2, 3, 4, 5]
 
 
-def test_read_model(model: Model):
-    pytest.skip
-
-
 def test_split_string1(model: Model):
     assert model.split_string("a;b;c", ";") == ["a", "b", "c"]
 

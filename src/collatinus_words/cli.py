@@ -4,7 +4,8 @@ if __name__ == "__main__":
     """python collatinus_words/cli.py"""
     try:
         model = Model()
-        model.read_model()
+        lines = model.read_model("data/modeles.la")
+        model.parse_lines(lines)
     except Exception as e:
         if hasattr(e, "message"):
             print(e.message)
